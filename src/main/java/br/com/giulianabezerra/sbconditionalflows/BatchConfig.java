@@ -1,8 +1,11 @@
 package br.com.giulianabezerra.sbconditionalflows;
 
+import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.StepExecution;
+import org.springframework.batch.core.annotation.AfterStep;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
@@ -27,8 +30,8 @@ public class BatchConfig {
     return jobBuilderFactory
         .get("job")
         .start(checarTipoDeArquivoClientes())
-        .next(cadastrarClientes())
-        .next(atualizarClientes())
+        .on("CADASTRO").to(cadastrarClientes())
+        .from(checarTipoDeArquivoClientes()).on("ATUALIZACAO").to(atualizarClientes()).end()
         .build();
   }
 
@@ -42,11 +45,12 @@ public class BatchConfig {
           String tipoArquivoClientes = "CADASTRO";
           // String tipoArquivoClientes = "ATUALIZACAO";
 
-          chunkContext.getStepContext().getStepExecution().getJobExecution().getExecutionContext()
+          chunkContext.getStepContext().getStepExecution().getExecutionContext()
               .put("TIPO", tipoArquivoClientes);
 
           return RepeatStatus.FINISHED;
         })
+        .listener(new OperationListener())
         .build();
   }
 
@@ -68,6 +72,18 @@ public class BatchConfig {
           return RepeatStatus.FINISHED;
         })
         .build();
+  }
+
+  class OperationListener {
+    @AfterStep
+    public ExitStatus afterStep(StepExecution stepExecution) {
+      if (stepExecution.getExecutionContext().get("TIPO").equals("CADASTRO"))
+        return new ExitStatus("CADASTRO");
+      else if (stepExecution.getExecutionContext().get("TIPO").equals("ATUALIZACAO"))
+        return new ExitStatus("ATUALIZACAO");
+      else
+        return ExitStatus.FAILED;
+    }
   }
 
 }
